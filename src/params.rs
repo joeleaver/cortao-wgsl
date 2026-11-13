@@ -157,7 +157,9 @@ impl MainPassParameters {
 
         let (unproject_params, projection_params) = if c.flip_y {
             (
-                [2.0 * inv_x, -2.0 * inv_y, -inv_x + inv_offset_x, inv_y - inv_offset_y],
+                // The original has `invY - invOffsetY` here, which unprojects an off-centre lens (a jitter, a
+                // shifted window) on the wrong side; `+` makes it the inverse of the projection below.
+                [2.0 * inv_x, -2.0 * inv_y, -inv_x + inv_offset_x, inv_y + inv_offset_y],
                 [0.5 * proj_x, -0.5 * proj_y, -0.5 + 0.5 * proj_offset_x, -0.5 - 0.5 * proj_offset_y],
             )
         } else {
@@ -227,6 +229,32 @@ mod tests {
         assert!((linear - 2.0).abs() < 1e-5);
         // The sky (depth 0) is told apart by a positive scale.
         assert!(p.depth_scale > 0.0);
+    }
+
+    /// A view-space point carried to texture coordinates the way the main pass projects samples,
+    /// and back the way it unprojects them, lands on the ray it started on.
+    fn round_trip(flip_y: bool) -> [f32; 2] {
+        let (a, b, c, d) = (1.3f32, 0.05f32, 1.7f32, -0.04f32);
+        // Columns: an off-centre, reversed, infinite perspective lens.
+        let projection = [[a, 0.0, 0.0, 0.0], [0.0, c, 0.0, 0.0], [b, d, 0.0, -1.0], [0.0, 0.0, 0.1, 0.0]];
+        let inverse = [[1.0 / a, 0.0, 0.0, 0.0], [0.0, 1.0 / c, 0.0, 0.0], [0.0, 0.0, 0.0, 10.0], [b / a, d / c, -1.0, 0.0]];
+        let c0 = Configuration { flip_y, projection_matrix: projection, inverse_projection_matrix: inverse, ..Configuration::new(64, 64) };
+        let p = MainPassParameters::new(&c0);
+        let (x, y, z) = (0.3f32, -0.2f32, -2.0f32);
+        // Main pass: projectionMatrix * (x, y, z) with columns (px, 0, 0), (0, py, 0), (pz, pw, -1).
+        let (u, v, w) = (p.projection_params[0] * x + p.projection_params[2] * z, p.projection_params[1] * y + p.projection_params[3] * z, -z);
+        let (u, v) = (u / w, v / w);
+        // Main pass: direction = uv * unproject.xy + unproject.zw, at depth 1 along -z.
+        let back = [u * p.unproject_params[0] + p.unproject_params[2], v * p.unproject_params[1] + p.unproject_params[3]];
+        [back[0] - x / -z, back[1] - y / -z]
+    }
+
+    #[test]
+    fn an_off_centre_lens_round_trips() {
+        for flip_y in [false, true] {
+            let error = round_trip(flip_y);
+            assert!(error[0].abs() < 1e-5 && error[1].abs() < 1e-5, "flip_y {flip_y}: off by {error:?}");
+        }
     }
 
     #[test]

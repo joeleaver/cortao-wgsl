@@ -58,6 +58,13 @@ texture. Copy them and adapt them when your inputs differ.
 
 ## What differs from the HLSL/GLSL original
 
+- **One fix: off-centre lenses with `flip_y`.** The original's `populateMainPassParameters`
+  computes the flipped unprojection's Y offset as `invY - invOffsetY`, the opposite side from
+  its own projection. A lens shifted vertically (a temporal anti-aliasing jitter, an
+  off-centre window) then has every sample's position rebuilt up to the shift away, about a
+  pixel per frame with a jitter. `MainPassParameters::new` uses `invY + invOffsetY`, and the test
+  `an_off_centre_lens_round_trips` checks projection and unprojection agree. Lenses with no
+  vertical shift are unaffected.
 - **No preprocessor:** the defines are `override` constants, as above.
 - **No 16-bit path:** the arithmetic is all 32-bit. WGSL has no 16-bit integers, and `f16`
   is optional in WebGPU. The original recommends 32-bit for the main pass anyway; its filter
