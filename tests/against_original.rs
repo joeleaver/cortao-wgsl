@@ -226,9 +226,19 @@ fn loadSSAO(texel: vec2<i32>, size: vec2<u32>) -> vec4<f32> {
     }
     return vec4<f32>(bitcast<f32>(value), 0.0, 0.0, 0.0);
 }
+fn unpackSSAO(value: u32) -> vec4<f32> {
+    if (CORTAO_FILTER_BENT_NORMAL) {
+        return unpack4x8snorm(value);
+    }
+    return vec4<f32>(bitcast<f32>(value), 0.0, 0.0, 0.0);
+}
 fn cortao_gatherSSAO(texCoords: vec2<f32>, offset: vec2<i32>) -> mat4x4<f32> {
     let size = textureDimensions(ssaoBuffer, 0);
     let t = cortao_gatherTexels(texCoords, size, offset);
+    if (cortao_gatherInBounds(t, size)) {
+        let g = textureGather(0, ssaoBuffer, nearestSampler, cortao_gatherCoords(t, size));
+        return mat4x4<f32>(unpackSSAO(g.x), unpackSSAO(g.y), unpackSSAO(g.z), unpackSSAO(g.w));
+    }
     return mat4x4<f32>(loadSSAO(t.x, size), loadSSAO(t.y, size), loadSSAO(t.z, size), loadSSAO(t.w, size));
 }
 fn cortao_writeFilterOutput(pixelCoords: vec2<i32>, ssao: vec4<f32>) {
@@ -252,6 +262,7 @@ fn filter_pass(gpu: &Gpu, scene: &Scene, packed: &wgpu::Texture, main: &MainOutp
     let level0 = level_view(packed, 0);
     let (ssao_view, output_view) = (view(&ssao), view(&output));
     let border = gpu.sampler(wgpu::AddressMode::ClampToBorder);
+    let clamp = gpu.sampler(wgpu::AddressMode::ClampToEdge);
     let mut resources = vec![
         (0, params.as_entire_binding()),
         (1, wgpu::BindingResource::TextureView(&level0)),
@@ -270,6 +281,7 @@ fn filter_pass(gpu: &Gpu, scene: &Scene, packed: &wgpu::Texture, main: &MainOutp
         resources.push((4, wgpu::BindingResource::Sampler(&border)));
         gpu.spirv_pipeline(&module, &[Slot::Uniform, Slot::UintTexture, Slot::UintTexture, Slot::Storage(F::Rgba32Float), Slot::Sampler])
     } else {
+        resources.push((4, wgpu::BindingResource::Sampler(&clamp)));
         let source = cortao_wgsl::compose(&[
             cortao_wgsl::BASE,
             cortao_wgsl::FILTER_PASS,

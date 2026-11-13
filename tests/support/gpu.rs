@@ -280,7 +280,7 @@ impl Gpu {
             address_mode_u: address_mode,
             address_mode_v: address_mode,
             address_mode_w: address_mode,
-            border_color: Some(wgpu::SamplerBorderColor::TransparentBlack),
+            border_color: (address_mode == wgpu::AddressMode::ClampToBorder).then_some(wgpu::SamplerBorderColor::TransparentBlack),
             ..Default::default()
         })
     }

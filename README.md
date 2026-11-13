@@ -65,7 +65,9 @@ texture. Copy them and adapt them when your inputs differ.
 - **No integer sampling or border clamping in WebGPU.** The callbacks read texels with
   `textureLoad` instead. `cortao_nearestMipLevel`, `cortao_nearestTexel` and
   `cortao_gatherTexels` reproduce nearest-mip selection, border clamping and gather order
-  exactly.
+  exactly. The reference filter callbacks use a hardware `textureGather` (nearest,
+  clamp-to-edge sampler) wherever all four texels lie inside the image, and single reads only at
+  its border, where a border-clamped gather would read zeros.
 - **The prepass is two dispatches.** WebGPU's default limit is 4 storage textures per stage, so
   `reference/prepass.wgsl` writes mips 0–3 and `reference/prepass_continue.wgsl` writes 4–7
   from mip 3 (`cortao_prepassContinue`). The result is identical to the single dispatch.

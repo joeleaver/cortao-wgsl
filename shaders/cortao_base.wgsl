@@ -143,3 +143,15 @@ fn cortao_gatherTexels(texCoords: vec2<f32>, size: vec2<u32>, offset: vec2<i32>)
     let base = vec2<i32>(floor(texCoords * vec2<f32>(size) - 0.5)) + offset;
     return CORTAOGatherTexels(base + vec2<i32>(0, 1), base + vec2<i32>(1, 1), base + vec2<i32>(1, 0), base);
 }
+
+// Whether all four of `texels` lie inside an image of `size`: then a hardware `textureGather` at
+// `cortao_gatherCoords(texels, size)` returns exactly them, and no border is involved.
+fn cortao_gatherInBounds(texels: CORTAOGatherTexels, size: vec2<u32>) -> bool {
+    return cortao_inBounds(texels.w, size) && cortao_inBounds(texels.y, size);
+}
+
+// Texture coordinates at which `textureGather` fetches exactly `texels`: the shared corner of the
+// four, where the gather footprint cannot round either way.
+fn cortao_gatherCoords(texels: CORTAOGatherTexels, size: vec2<u32>) -> vec2<f32> {
+    return (vec2<f32>(texels.w) + 1.0) / vec2<f32>(size);
+}

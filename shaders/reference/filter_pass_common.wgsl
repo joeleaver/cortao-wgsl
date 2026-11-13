@@ -3,6 +3,7 @@
 
 @group(0) @binding(0) var<uniform> parameters: CORTAOFilterPassParameters;
 @group(0) @binding(1) var packedDataBuffer: texture_2d<u32>; // r32uint; level 0 is read
+@group(0) @binding(4) var nearestSampler: sampler; // nearest filtering, clamp to edge (non-filtering)
 
 fn cortao_loadPackedTexel(texel: vec2<i32>, size: vec2<u32>) -> u32 {
     if (!cortao_inBounds(texel, size)) {
@@ -14,6 +15,10 @@ fn cortao_loadPackedTexel(texel: vec2<i32>, size: vec2<u32>) -> u32 {
 fn cortao_gatherPackedData(texCoords: vec2<f32>, offset: vec2<i32>) -> vec4<u32> {
     let size = textureDimensions(packedDataBuffer, 0);
     let t = cortao_gatherTexels(texCoords, size, offset);
+    if (cortao_gatherInBounds(t, size)) {
+        // One hardware gather inside the image; the border needs the texels one by one.
+        return textureGather(0, packedDataBuffer, nearestSampler, cortao_gatherCoords(t, size));
+    }
     return vec4<u32>(cortao_loadPackedTexel(t.x, size), cortao_loadPackedTexel(t.y, size), cortao_loadPackedTexel(t.z, size), cortao_loadPackedTexel(t.w, size));
 }
 

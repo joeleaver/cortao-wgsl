@@ -16,6 +16,10 @@ fn cortao_loadSSAOTexel(texel: vec2<i32>, size: vec2<u32>) -> vec4<f32> {
 fn cortao_gatherSSAO(texCoords: vec2<f32>, offset: vec2<i32>) -> mat4x4<f32> {
     let size = textureDimensions(ssaoBuffer, 0);
     let t = cortao_gatherTexels(texCoords, size, offset);
+    if (cortao_gatherInBounds(t, size)) {
+        let p = textureGather(0, ssaoBuffer, nearestSampler, cortao_gatherCoords(t, size));
+        return mat4x4<f32>(unpack4x8snorm(p.x), unpack4x8snorm(p.y), unpack4x8snorm(p.z), unpack4x8snorm(p.w));
+    }
     return mat4x4<f32>(cortao_loadSSAOTexel(t.x, size), cortao_loadSSAOTexel(t.y, size), cortao_loadSSAOTexel(t.z, size), cortao_loadSSAOTexel(t.w, size));
 }
 
