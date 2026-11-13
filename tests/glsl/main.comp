@@ -1,0 +1,59 @@
+// The original CORTAO main pass, unchanged, behind test callbacks that keep every output at
+// full precision: (occlusion, bent normal) as rgba32f and the ray mask as r32ui.
+#version 460 core
+#extension GL_EXT_control_flow_attributes : enable
+#extension GL_EXT_samplerless_texture_functions : require
+#define CORTAO_GLSL 1
+#define CORTAO_16_BIT 0
+#include "CORTAOMainPass.h"
+
+layout(set = 0, binding = 0, std140) uniform Parameters { CORTAOMainPassParameters parameters; };
+layout(set = 0, binding = 1) uniform utexture2D packedDataBuffer;
+layout(set = 0, binding = 2) uniform texture2D normalBuffer;
+layout(set = 0, binding = 3) uniform utexture3D occluderLookupTable;
+layout(set = 0, binding = 4, std430) readonly buffer BentNormals { uint bentNormalLookupTable[]; };
+layout(set = 0, binding = 5, rgba32f) uniform writeonly image2D outputBuffer;
+layout(set = 0, binding = 6, r32ui) uniform writeonly uimage2D rayBitsBuffer;
+layout(set = 0, binding = 7) uniform sampler nearestBorderSampler;
+layout(set = 0, binding = 8) uniform sampler nearestClampSampler;
+
+cortao_uint cortao_samplePackedData(cortao_float2 texCoords, cortao_float mipmap) {
+	return textureLod(usampler2D(packedDataBuffer, nearestBorderSampler), texCoords, mipmap).r;
+}
+
+cortao_half3 cortao_loadNormal(cortao_int2 pixelCoords) {
+	return cortao_half3(texelFetch(normalBuffer, pixelCoords, 0).xyz);
+}
+
+#if CORTAO_OCCLUDER_LOOKUP_TABLE
+cortao_uint cortao_sampleOccluderLookupTable(cortao_float3 texCoords) {
+	return textureLod(usampler3D(occluderLookupTable, nearestClampSampler), texCoords, 0.0f).r;
+}
+#endif
+
+#if CORTAO_BENT_NORMAL_LOOKUP_TABLE
+cortao_half3 cortao_loadBentNormalLookupTable(cortao_uint rayBits) {
+	cortao_half2 bentNormal = unpackSnorm4x8(bentNormalLookupTable[rayBits]).xy;
+	return cortao_half3(bentNormal, sqrt(max(cortao_half(0.0), cortao_half(1.0) - dot(bentNormal, bentNormal))));
+}
+#endif
+
+void cortao_writeResult(cortao_int2 pixelCoords, cortao_half occlusion, cortao_half3 bentNormal, cortao_half3x3 tangentSpaceTransform, cortao_uint rayBits) {
+	imageStore(outputBuffer, pixelCoords, cortao_float4(occlusion, bentNormal));
+	imageStore(rayBitsBuffer, pixelCoords, cortao_uint4(rayBits, 0u, 0u, 0u));
+}
+
+uvec2 deinterleave(uint index) {
+	uvec2 p = uvec2(index, index) >> uvec2(0, 1);
+	p &= 0x5555u;
+	p = (p ^ (p >> 1u)) & 0x3333u;
+	p = (p ^ (p >> 2u)) & 0x0f0fu;
+	p = (p ^ (p >> 4u)) & 0x00ffu;
+	return p;
+}
+
+layout(local_size_x = 16, local_size_y = 16) in;
+void main() {
+	uvec2 pixelCoords = gl_WorkGroupID.xy * gl_WorkGroupSize.xy + deinterleave(gl_LocalInvocationIndex);
+	cortao_mainPass(pixelCoords, parameters);
+}

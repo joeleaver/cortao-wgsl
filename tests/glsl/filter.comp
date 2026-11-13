@@ -1,0 +1,40 @@
+// The original CORTAO filter pass, unchanged (32-bit), behind test callbacks. The main pass's
+// output is read as r32ui: pack4x8snorm(occlusion, bent normal), or the occlusion's float bits
+// when only occlusion is filtered. The result is written as rgba32f.
+#version 460 core
+#extension GL_EXT_control_flow_attributes : enable
+#define CORTAO_GLSL 1
+#define CORTAO_16_BIT 0
+#include "CORTAOFilterPass.h"
+
+layout(set = 0, binding = 0, std140) uniform Parameters { CORTAOFilterPassParameters parameters; };
+layout(set = 0, binding = 1) uniform utexture2D packedDataBuffer;
+layout(set = 0, binding = 2) uniform utexture2D ssaoBuffer;
+layout(set = 0, binding = 3, rgba32f) uniform writeonly image2D outputBuffer;
+layout(set = 0, binding = 4) uniform sampler nearestBorderSampler;
+
+cortao_uint4 cortao_gatherPackedData(cortao_float2 texCoords, cortao_int2 offset) {
+	return textureGatherOffset(usampler2D(packedDataBuffer, nearestBorderSampler), texCoords, offset);
+}
+
+#if CORTAO_FILTER_BENT_NORMAL
+cortao_half4x4 cortao_gatherSSAO(cortao_float2 texCoords, cortao_int2 offset) {
+	cortao_uint4 packed = textureGatherOffset(usampler2D(ssaoBuffer, nearestBorderSampler), texCoords, offset);
+	return cortao_half4x4(unpackSnorm4x8(packed[0]), unpackSnorm4x8(packed[1]), unpackSnorm4x8(packed[2]), unpackSnorm4x8(packed[3]));
+}
+void cortao_writeFilterOutput(cortao_int2 pixelCoords, cortao_half4 ssao) {
+	imageStore(outputBuffer, pixelCoords, ssao);
+}
+#else
+cortao_half4 cortao_gatherSSAO(cortao_float2 texCoords, cortao_int2 offset) {
+	return uintBitsToFloat(textureGatherOffset(usampler2D(ssaoBuffer, nearestBorderSampler), texCoords, offset));
+}
+void cortao_writeFilterOutput(cortao_int2 pixelCoords, cortao_half ssao) {
+	imageStore(outputBuffer, pixelCoords, cortao_float4(ssao, 0, 0, 0));
+}
+#endif
+
+layout(local_size_x = 8, local_size_y = 8) in;
+void main() {
+	cortao_filterPass(gl_GlobalInvocationID.xy, parameters);
+}

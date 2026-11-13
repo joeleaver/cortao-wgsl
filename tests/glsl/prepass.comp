@@ -1,0 +1,46 @@
+// The original CORTAO prepass, unchanged, behind test callbacks: all 8 mips in one dispatch
+// (eight bindings, where the original binds an array).
+#version 460 core
+#extension GL_EXT_control_flow_attributes : enable
+#extension GL_EXT_samplerless_texture_functions : require
+#define CORTAO_GLSL 1
+#include "CORTAOPrepass.h"
+
+layout(set = 0, binding = 0, std140) uniform Parameters { CORTAOPrepassParameters parameters; };
+layout(set = 0, binding = 1) uniform texture2D depthBuffer;
+layout(set = 0, binding = 2) uniform texture2D normalBuffer;
+layout(set = 0, binding = 3, r32ui) uniform writeonly uimage2D mip0;
+layout(set = 0, binding = 4, r32ui) uniform writeonly uimage2D mip1;
+layout(set = 0, binding = 5, r32ui) uniform writeonly uimage2D mip2;
+layout(set = 0, binding = 6, r32ui) uniform writeonly uimage2D mip3;
+layout(set = 0, binding = 7, r32ui) uniform writeonly uimage2D mip4;
+layout(set = 0, binding = 8, r32ui) uniform writeonly uimage2D mip5;
+layout(set = 0, binding = 9, r32ui) uniform writeonly uimage2D mip6;
+layout(set = 0, binding = 10, r32ui) uniform writeonly uimage2D mip7;
+
+cortao_float cortao_loadDepth(cortao_int2 pixelCoords) {
+	return texelFetch(depthBuffer, pixelCoords, 0).r;
+}
+
+cortao_float3 cortao_loadNormal(cortao_int2 pixelCoords) {
+	return texelFetch(normalBuffer, pixelCoords, 0).xyz;
+}
+
+void cortao_writePackedData(cortao_int2 pixelCoords, cortao_int mipLevel, cortao_uint data) {
+	cortao_uint4 v = cortao_uint4(data, 0, 0, 0);
+	switch (mipLevel) {
+		case 0: imageStore(mip0, pixelCoords, v); break;
+		case 1: imageStore(mip1, pixelCoords, v); break;
+		case 2: imageStore(mip2, pixelCoords, v); break;
+		case 3: imageStore(mip3, pixelCoords, v); break;
+		case 4: imageStore(mip4, pixelCoords, v); break;
+		case 5: imageStore(mip5, pixelCoords, v); break;
+		case 6: imageStore(mip6, pixelCoords, v); break;
+		case 7: imageStore(mip7, pixelCoords, v); break;
+	}
+}
+
+layout(local_size_x = 8, local_size_y = 8) in;
+void main() {
+	cortao_prepass(gl_GlobalInvocationID.xy, parameters);
+}

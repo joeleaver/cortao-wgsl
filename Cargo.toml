@@ -1,0 +1,19 @@
+[package]
+name = "cortao-wgsl"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "A WGSL / WebGPU port of CORTAO (Circular Occluder Ray-Traced Ambient Occlusion)"
+repository = "https://github.com/joeleaver/cortao-wgsl"
+keywords = ["wgsl", "webgpu", "ssao", "ambient-occlusion", "wgpu"]
+categories = ["graphics", "rendering"]
+exclude = ["reference/"]
+
+[dependencies]
+bytemuck = { version = "1.25", features = ["derive"] }
+
+[dev-dependencies]
+wgpu = "30"
+pollster = "0.4"
+glam = "0.30"
+naga = { version = "30", features = ["wgsl-in"] }
